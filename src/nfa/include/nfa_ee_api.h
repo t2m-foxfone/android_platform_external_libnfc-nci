@@ -15,8 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2013-2014 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 /******************************************************************************
  *
  *  NFA interface to NFCEE
@@ -34,6 +51,11 @@
 *****************************************************************************/
 #define NFA_MAX_AID_LEN             NFC_MAX_AID_LEN /* 16 per ISO 7816 specification    */
 #define NFA_EE_HANDLE_DH            (NFA_HANDLE_GROUP_EE|NFC_DH_ID)
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+extern  UINT8 NFA_REMOVE_ALL_AID[];
+#define NFA_REMOVE_ALL_AID_LEN      (0x08)
+#define NFA_EE_AE_NXP_PREFIX_MATCH      (0x10)
+#endif
 
 /* NFA EE callback events */
 enum
@@ -112,6 +134,12 @@ typedef struct
     tNFA_EE_INTERFACE   ee_interface[NFC_MAX_EE_INTERFACE];/* NFCEE supported interface */
     UINT8               num_tlvs;               /* number of TLVs           */
     tNFA_EE_TLV         ee_tlv[NFC_MAX_EE_TLVS];/* the TLV                  */
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+    tNFA_NFC_PROTOCOL       la_protocol;        /* Listen A protocol    */
+    tNFA_NFC_PROTOCOL       lb_protocol;        /* Listen B protocol    */
+    tNFA_NFC_PROTOCOL       lf_protocol;        /* Listen F protocol    */
+    tNFA_NFC_PROTOCOL       lbp_protocol;       /* Listen B' protocol   */
+#endif
 } tNFA_EE_INFO;
 
 
@@ -166,6 +194,10 @@ typedef struct
     tNFA_NFC_PROTOCOL   lb_protocol;        /* Listen B protocol    */
     tNFA_NFC_PROTOCOL   lf_protocol;        /* Listen F protocol    */
     tNFA_NFC_PROTOCOL   lbp_protocol;       /* Listen B' protocol   */
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+    tNFA_NFC_PROTOCOL   pa_protocol;        /* Passive poll A SWP Reader   */
+    tNFA_NFC_PROTOCOL   pb_protocol;        /* Passive poll B SWP Reader   */
+#endif
 } tNFA_EE_DISCOVER_INFO;
 
 /* Data for NFA_EE_DISCOVER_REQ_EVT */
@@ -249,6 +281,25 @@ NFC_API extern tNFA_STATUS NFA_EeDiscover (tNFA_EE_CBACK *p_cback);
 *******************************************************************************/
 NFC_API extern tNFA_STATUS NFA_EeGetInfo (UINT8        *p_num_nfcee,
                                           tNFA_EE_INFO *p_info);
+
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         NFA_AllEeGetInfo
+**
+** Description      This function retrieves the All NFCEE's independent of
+**                  their status information from NFA.
+**                  The actual number of NFCEE is returned in p_num_nfcee
+**                  and NFCEE information is returned in p_info
+**
+** Returns          NFA_STATUS_OK if information is retrieved successfully
+**                  NFA_STATUS_FAILED If wrong state (retry later)
+**                  NFA_STATUS_INVALID_PARAM If bad parameter
+**
+*******************************************************************************/
+NFC_API extern tNFA_STATUS NFA_AllEeGetInfo (UINT8        *p_num_nfcee,
+                                             tNFA_EE_INFO *p_info);
+#endif
 
 /*******************************************************************************
 **
@@ -367,7 +418,12 @@ NFC_API extern tNFA_STATUS NFA_EeSetDefaultProtoRouting (tNFA_HANDLE         ee_
 NFC_API extern tNFA_STATUS NFA_EeAddAidRouting (tNFA_HANDLE          ee_handle,
                                                 UINT8                aid_len,
                                                 UINT8               *p_aid,
-                                                tNFA_EE_PWR_STATE    power_state);
+                                                tNFA_EE_PWR_STATE    power_state
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+                                                , UINT8                vs_info);
+#else
+)
+#endif
 
 /*******************************************************************************
 **
@@ -474,10 +530,42 @@ NFC_API extern tNFA_STATUS NFA_EeSendData (tNFA_HANDLE  ee_handle,
 *******************************************************************************/
 NFC_API extern tNFA_STATUS NFA_EeDisconnect (tNFA_HANDLE ee_handle);
 
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         NFA_AddEePowerState
+**
+** Description      This function is called to add power state in the
+**                  listen mode routing table in NFCC.
+**
+** Note:            If RF discovery is started, NFA_StopRfDiscovery()/NFA_RF_DISCOVERY_STOPPED_EVT
+**                  should happen before calling this function
+**
+** Note:            NFA_EeUpdateNow() should be called after last NFA-EE function
+**                  to change the listen mode routing is called.
+**
+** Returns          NFA_STATUS_OK if successfully initiated
+**                  NFA_STATUS_FAILED otherwise
+**                  NFA_STATUS_INVALID_PARAM If bad parameter
+**
+*******************************************************************************/
+tNFA_STATUS extern NFA_AddEePowerState(tNFA_HANDLE          ee_handle,
+                                tNFA_EE_PWR_STATE    power_state_mask);
+
+/*******************************************************************************
+**
+** Function         NFA_GetAidTableSize
+**
+** Description      This function is called to get the AID routing table size.
+**
+** Returns          AID routing table currently used size.
+**
+*******************************************************************************/
+NFC_API extern UINT8 NFA_GetAidTableSize();
+#endif
 
 #ifdef __cplusplus
 }
 #endif
 
 #endif /* NFA_EE_API_H */
-

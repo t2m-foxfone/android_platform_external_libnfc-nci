@@ -15,6 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2013-2014 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 #include "OverrideLog.h"
 #include "NfcAdaptation.h"
 extern "C"
@@ -40,11 +59,21 @@ tHAL_NFC_CBACK* NfcAdaptation::mHalCallback = NULL;
 tHAL_NFC_DATA_CBACK* NfcAdaptation::mHalDataCallback = NULL;
 ThreadCondVar NfcAdaptation::mHalOpenCompletedEvent;
 ThreadCondVar NfcAdaptation::mHalCloseCompletedEvent;
+ThreadCondVar NfcAdaptation::mHalCoreResetCompletedEvent;
+ThreadCondVar NfcAdaptation::mHalCoreInitCompletedEvent;
+ThreadCondVar NfcAdaptation::mHalInitCompletedEvent;
 
 UINT32 ScrProtocolTraceFlag = SCR_PROTO_TRACE_ALL; //0x017F00;
 UINT8 appl_trace_level = 0xff;
+#if (NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+UINT8 appl_dta_mode_flag = 0x00;
+#endif
 char bcm_nfc_location[120];
 char nci_hal_module[64];
+
+pthread_mutex_t hal_mutex = PTHREAD_MUTEX_INITIALIZER;
+pthread_cond_t hal_cond;
+int count;
 
 static UINT8 nfa_dm_cfg[sizeof ( tNFA_DM_CFG ) ];
 extern tNFA_DM_CFG *p_nfa_dm_cfg;
@@ -579,12 +608,80 @@ void NfcAdaptation::DownloadFirmware ()
 {
     const char* func = "NfcAdaptation::DownloadFirmware";
     ALOGD ("%s: enter", func);
+    static UINT8 cmd_reset_nci[] = {0x20,0x00,0x01,0x01};
+    static UINT8 cmd_init_nci[]  = {0x20,0x01,0x00};
+    static UINT8 cmd_reset_nci_size = sizeof(cmd_reset_nci) / sizeof(UINT8);
+    static UINT8 cmd_init_nci_size  = sizeof(cmd_init_nci)  / sizeof(UINT8);
+    struct timespec ts;
+    pthread_condattr_t hal_cond_attr;
+    count=1;
+    UINT8 p_core_init_rsp_params;
+
+    /* Set up the condvar attributes to use CLOCK_MONOTONIC. */
+
+    pthread_condattr_init( &hal_cond_attr);
+    pthread_condattr_setclock( &hal_cond_attr, CLOCK_MONOTONIC);
+    pthread_cond_init( &hal_cond, &hal_cond_attr);
+
     HalInitialize ();
 
     mHalOpenCompletedEvent.lock ();
     ALOGD ("%s: try open HAL", func);
     HalOpen (HalDownloadFirmwareCallback, HalDownloadFirmwareDataCallback);
     mHalOpenCompletedEvent.wait ();
+    /* Send a CORE_RESET and CORE_INIT to the NFCC. This is required because when calling
+     * HalCoreInitialized, the HAL is going to parse the conf file and send NCI commands
+     * to the NFCC. Hence CORE-RESET and CORE-INIT have to be sent prior to this.
+     */
+    retry:
+    //mHalCoreResetCompletedEvent.lock();
+    ALOGD("%s: send CORE_RESET", func);
+    HalWrite(cmd_reset_nci_size , cmd_reset_nci);
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    ts.tv_sec += 0;
+    ts.tv_nsec += 100*1000*1000; //100 milisec
+    if (pthread_cond_timedwait(&hal_cond, &hal_mutex, &ts))
+    {
+        ALOGD("timeout for 100ms");
+        /*To do VEN hard reset*/
+        HalPowerCycle();
+        if(count <= 5)
+        {
+          count++;
+          goto retry;
+        }
+
+        goto TheEnd;
+    }
+    //mHalCoreResetCompletedEvent.wait();
+    //mHalCoreInitCompletedEvent.lock();
+    ALOGD("%s: send CORE_INIT", func);
+    HalWrite(cmd_init_nci_size , cmd_init_nci);
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    ts.tv_sec += 0;
+    ts.tv_nsec += 100*1000*1000; //100 milisec
+    if (pthread_cond_timedwait(&hal_cond, &hal_mutex, &ts))
+    {
+        ALOGD("timeout for 100ms");
+        /*To do VEN hard reset*/
+        HalPowerCycle();
+        if(count <= 5)
+        {
+            count++;
+            goto retry;
+        }
+
+        goto TheEnd;
+    }
+
+    // mHalCoreInitCompletedEvent.wait();
+
+    TheEnd:
+    pthread_cond_destroy(&hal_cond);
+    mHalInitCompletedEvent.lock ();
+    ALOGD ("%s: try init HAL", func);
+    HalCoreInitialized (&p_core_init_rsp_params);
+    mHalInitCompletedEvent.wait ();
 
     mHalCloseCompletedEvent.lock ();
     ALOGD ("%s: try close HAL", func);
@@ -616,6 +713,12 @@ void NfcAdaptation::HalDownloadFirmwareCallback (nfc_event_t event, nfc_status_t
             mHalOpenCompletedEvent.signal ();
             break;
         }
+    case HAL_NFC_POST_INIT_CPLT_EVT:
+        {
+            ALOGD ("%s: HAL_NFC_POST_INIT_CPLT_EVT", func);
+            mHalInitCompletedEvent.signal ();
+            break;
+        }
     case HAL_NFC_CLOSE_CPLT_EVT:
         {
             ALOGD ("%s: HAL_NFC_CLOSE_CPLT_EVT", func);
@@ -636,6 +739,23 @@ void NfcAdaptation::HalDownloadFirmwareCallback (nfc_event_t event, nfc_status_t
 *******************************************************************************/
 void NfcAdaptation::HalDownloadFirmwareDataCallback (uint16_t data_len, uint8_t* p_data)
 {
+    const char* func = "NfcAdaptation::HalDownloadFirmwareDataCallback";
+    ALOGD ("%s:", func);
+    if (data_len > 3)
+    {
+        if (p_data[0] == 0x40 && p_data[1] == 0x00)
+        {
+            //mHalCoreResetCompletedEvent.signal();
+            pthread_cond_signal(&hal_cond);
+            count=1;
+        }
+        else if (p_data[0] == 0x40 && p_data[1] == 0x01)
+        {
+            //mHalCoreInitCompletedEvent.signal();
+            pthread_cond_signal(&hal_cond);
+            count=1;
+        }
+    }
 }
 
 

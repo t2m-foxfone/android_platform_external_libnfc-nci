@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2014 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -61,7 +79,7 @@
 #if NFC_DYNAMIC_MEMORY == FALSE
 tNFC_CB nfc_cb;
 #endif
-
+UINT8 i2c_fragmentation_enabled = 0xff;
 #if (NFC_RW_ONLY == FALSE)
 #define NFC_NUM_INTERFACE_MAP   2
 #else
@@ -163,6 +181,8 @@ static char *nfc_hal_event_name (UINT8 event)
     case HAL_NFC_ERROR_EVT:
         return ("HAL_NFC_ERROR_EVT");
 
+    case HAL_NFC_ENABLE_I2C_FRAGMENTATION_EVT:
+        return (" HAL_NFC_ENABLE_I2C_FRAGMENTATION_EVT ");
     default:
         return ("???? UNKNOWN EVENT");
     }
@@ -322,7 +342,17 @@ void nfc_gen_cleanup (void)
     if (nfc_cb.flags & NFC_FL_DISCOVER_PENDING)
     {
         nfc_cb.flags &= ~NFC_FL_DISCOVER_PENDING;
+
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+        if(nfc_cb.p_last_disc)
+        {
+            GKI_freebuf (nfc_cb.p_last_disc);
+            nfc_cb.p_last_disc = NULL;
+        }
+        nfc_cb.p_last_disc = nfc_cb.p_disc_pending;
+#else
         GKI_freebuf (nfc_cb.p_disc_pending);
+#endif
         nfc_cb.p_disc_pending = NULL;
     }
 
@@ -423,7 +453,16 @@ void nfc_main_handle_hal_evt (tNFC_HAL_EVT_MSG *p_msg)
             nfc_cb.flags &= ~NFC_FL_DISCOVER_PENDING;
             ps            = (UINT8 *)nfc_cb.p_disc_pending;
             nci_snd_discover_cmd (*ps, (tNFC_DISCOVER_PARAMS *)(ps + 1));
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+            if(nfc_cb.p_last_disc)
+            {
+                GKI_freebuf( nfc_cb.p_last_disc);
+                nfc_cb.p_last_disc = NULL;
+            }
+            nfc_cb.p_last_disc = nfc_cb.p_disc_pending;
+#else
             GKI_freebuf (nfc_cb.p_disc_pending);
+#endif
             nfc_cb.p_disc_pending = NULL;
         }
         else
@@ -487,9 +526,9 @@ void nfc_main_handle_hal_evt (tNFC_HAL_EVT_MSG *p_msg)
         }
         break;
 
-    default:
-        NFC_TRACE_ERROR1 ("nfc_main_handle_hal_evt (): unhandled event (0x%x).", p_msg->hal_evt);
-        break;
+        default:
+            NFC_TRACE_ERROR1 ("nfc_main_handle_hal_evt (): unhandled event (0x%x).", p_msg->hal_evt);
+            break;
     }
 }
 
@@ -600,7 +639,12 @@ static void nfc_main_hal_cback(UINT8 event, tHAL_NFC_STATUS status)
     case HAL_NFC_ERROR_EVT:
         nfc_main_post_hal_evt (event, status);
         break;
-
+    case HAL_NFC_ENABLE_I2C_FRAGMENTATION_EVT:
+    {
+        NFC_TRACE_DEBUG1 ("nfc_main_hal_cback handled  event  %x", event);
+        set_i2c_fragmentation_enabled(I2C_FRAGMENATATION_ENABLED);
+    }
+        break;
     default:
         NFC_TRACE_DEBUG1 ("nfc_main_hal_cback unhandled event %x", event);
         break;
@@ -1176,7 +1220,16 @@ tNFC_STATUS NFC_Deactivate (tNFC_DEACT_TYPE deactivate_type)
             /* if HAL did not request for control, clear this bit now */
             nfc_cb.flags &= ~NFC_FL_CONTROL_REQUESTED;
         }
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+        if( nfc_cb.p_last_disc)
+        {
+            GKI_freebuf (nfc_cb.p_last_disc);
+            nfc_cb.p_last_disc = NULL;
+        }
+        nfc_cb.p_last_disc = nfc_cb.p_disc_pending;
+#else
         GKI_freebuf (nfc_cb.p_disc_pending);
+#endif
         nfc_cb.p_disc_pending = NULL;
         return NFC_STATUS_OK;
     }
@@ -1343,6 +1396,16 @@ UINT8 NFC_SetTraceLevel (UINT8 new_level)
         nfc_cb.trace_level = new_level;
 
     return (nfc_cb.trace_level);
+}
+
+void set_i2c_fragmentation_enabled(int value)
+{
+    i2c_fragmentation_enabled = value;
+}
+
+int  get_i2c_fragmentation_enabled()
+{
+    return i2c_fragmentation_enabled;
 }
 
 #if (BT_TRACE_VERBOSE == TRUE)

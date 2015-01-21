@@ -35,6 +35,7 @@
 #include "rw_api.h"
 #include "rw_int.h"
 
+#define RW_I93_TOUT_RESP                        RW_I93_MAX_RSP_TIMEOUT  /* Response timeout*/
 #define RW_I93_TOUT_RESP                        1000    /* Response timeout     */
 #define RW_I93_TOUT_STAY_QUIET                  200     /* stay quiet timeout   */
 #define RW_I93_READ_MULTI_BLOCK_SIZE            128     /* max reading data if read multi block is supported */
@@ -3080,6 +3081,13 @@ static void rw_i93_data_cback (UINT8 conn_id, tNFC_CONN_EVT event, tNFC_CONN *p_
         }
         else
         {
+            /* free retry buffer */
+            if ((event == NFC_DEACTIVATE_CEVT )&& p_i93->p_retry_cmd)
+            {
+                GKI_freebuf (p_i93->p_retry_cmd);
+                p_i93->p_retry_cmd = NULL;
+                p_i93->retry_count = 0;
+            }
             NFC_SetStaticRfCback (NULL);
             p_i93->state = RW_I93_STATE_NOT_ACTIVATED;
         }

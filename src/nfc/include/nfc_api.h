@@ -15,7 +15,25 @@
  *  limitations under the License.
  *
  ******************************************************************************/
-
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2013-2014 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -56,9 +74,20 @@
 #define NFC_STATUS_EE_PROTOCOL_ERR      NCI_STATUS_EE_PROTOCOL_ERR      /* EE protocol error    */
 #define NFC_STATUS_EE_TIMEOUT           NCI_STATUS_EE_TIMEOUT           /* EE Timeout           */
 
+#if (NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+//DTA API for MW Version need to change according to release
+#define NFC_NXP_MW_VERSION_MAJ          (3U) /* MW Major Version */
+#define NFC_NXP_MW_VERSION_MIN          (2U) /* MW Minor Version */
+#endif
+
 /* 0xE0 ~0xFF are proprietary status codes */
 #define NFC_STATUS_CMD_STARTED          0xE3/* Command started successfully                     */
+#if (NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+#define NFC_STATUS_HW_TIMEOUT           0xEC/* changed from 0xE4 (as 0xE4 is defined for STATUS_EMVCO_PCD_COLLISOIN
+                                             NFCC Timeout in responding to an NCI command     */
+#else
 #define NFC_STATUS_HW_TIMEOUT           0xE4/* NFCC Timeout in responding to an NCI command     */
+#endif
 #define NFC_STATUS_CONTINUE             0xE5/* More (same) event to follow                      */
 #define NFC_STATUS_REFUSED              0xE6/* API is called to perform illegal function        */
 #define NFC_STATUS_BAD_RESP             0xE7/* Wrong format of R-APDU, CC file or NDEF file     */
@@ -233,6 +262,17 @@ typedef struct
     UINT8                   *p_param_tlvs;  /* TLV                  */
 } tNFC_GET_CONFIG_REVT;
 
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+/* This data type is for FW Version */
+typedef struct
+{
+    UINT8           rom_code_version;    /* ROM code Version  */
+    UINT8           major_version;       /* Major Version */
+    UINT8           minor_version;       /* Minor Version  */
+} tNFC_FW_VERSION;
+#endif
+
+
 /* the data type associated with NFC_NFCEE_DISCOVER_REVT */
 typedef struct
 {
@@ -342,6 +382,11 @@ typedef UINT8 tNFC_RF_TECH;
 #define NFC_PROTOCOL_T3T        NCI_PROTOCOL_T3T      /* Type3Tag    - NFC-F            */
 #define NFC_PROTOCOL_ISO_DEP    NCI_PROTOCOL_ISO_DEP  /* Type 4A,4B  - NFC-A or NFC-B   */
 #define NFC_PROTOCOL_NFC_DEP    NCI_PROTOCOL_NFC_DEP  /* NFCDEP/LLCP - NFC-A or NFC-F       */
+#if (NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+#define NFC_PROTOCOL_ISO7816    NCI_PROTOCOL_ISO7816 /*ISO7816 -AID default Routing */
+#define NFC_PROTOCOL_MIFARE     NCI_PROTOCOL_MIFARE
+#define NFC_PROTOCOL_T3BT       NCI_PROTOCOL_T3BT
+#endif
 #define NFC_PROTOCOL_B_PRIME    NCI_PROTOCOL_B_PRIME
 #define NFC_PROTOCOL_15693      NCI_PROTOCOL_15693
 #define NFC_PROTOCOL_KOVIO      NCI_PROTOCOL_KOVIO
@@ -391,6 +436,9 @@ typedef UINT8 tNFC_BIT_RATE;
 #define NFC_INTERFACE_LLCP_LOW      NCI_INTERFACE_LLCP_LOW
 #define NFC_INTERFACE_LLCP_HIGH     NCI_INTERFACE_LLCP_HIGH
 #define NFC_INTERFACE_VS_T2T_CE     NCI_INTERFACE_VS_T2T_CE
+#if (NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+#define NFC_INTERFACE_MIFARE        NCI_INTERFACE_MIFARE
+#endif
 typedef tNCI_INTF_TYPE tNFC_INTF_TYPE;
 
 /**********************************************
@@ -531,11 +579,18 @@ typedef tNFC_STATUS tNFC_START_DEVT;
 typedef tNCI_RF_PA_PARAMS tNFC_RF_PA_PARAMS;
 #define NFC_MAX_SENSB_RES_LEN         NCI_MAX_SENSB_RES_LEN
 #define NFC_NFCID0_MAX_LEN          4
+#if (NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+#define NFC_PUPIID_MAX_LEN          8
+#endif
 typedef struct
 {
     UINT8       sensb_res_len;/* Length of SENSB_RES Response (Byte 2 - Byte 12 or 13) Available after Technology Detection */
     UINT8       sensb_res[NFC_MAX_SENSB_RES_LEN]; /* SENSB_RES Response (ATQ) */
     UINT8       nfcid0[NFC_NFCID0_MAX_LEN];
+#if (NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+    UINT8       pupiid_len;
+    UINT8       pupiid[NFC_PUPIID_MAX_LEN];
+#endif
 } tNFC_RF_PB_PARAMS;
 
 #define NFC_MAX_SENSF_RES_LEN       NCI_MAX_SENSF_RES_LEN
@@ -592,7 +647,7 @@ typedef struct
     UINT8                   rf_disc_id;     /* RF Discovery ID                  */
     UINT8                   protocol;       /* supported protocol               */
     tNFC_RF_TECH_PARAMS     rf_tech_param;  /* RF technology parameters         */
-    BOOLEAN                 more;           /* 0: last notification             */
+    UINT8                   more;           /* 0: last notification             */
 } tNFC_RESULT_DEVT;
 
 /* the data type associated with NFC_SELECT_DEVT */
@@ -1282,6 +1337,20 @@ NFC_API extern UINT8 NFC_SetTraceLevel (UINT8 new_level);
 **
 *******************************************************************************/
 NFC_API extern char * NFC_GetStatusName (tNFC_STATUS status);
+#endif
+
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         nfc_ncif_getFWVersion
+**
+** Description      This function sets the trace level for NFC.  If called with
+**                  a value of 0xFF, it simply returns the current trace level.
+**
+** Returns          The new or current trace level
+**
+*******************************************************************************/
+NFC_API extern tNFC_FW_VERSION nfc_ncif_getFWVersion();
 #endif
 
 #ifdef __cplusplus

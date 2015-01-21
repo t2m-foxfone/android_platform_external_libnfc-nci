@@ -16,6 +16,25 @@
  *
  ******************************************************************************/
 
+/******************************************************************************
+ *
+ *  The original Work has been changed by NXP Semiconductors.
+ *
+ *  Copyright (C) 2013-2014 NXP Semiconductors
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *  http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ ******************************************************************************/
 
 /******************************************************************************
  *
@@ -655,6 +674,20 @@ LLCP_API extern tLLCP_STATUS LLCP_DiscoverService (char            *p_name,
 *******************************************************************************/
 LLCP_API extern UINT8 LLCP_SetTraceLevel (UINT8 new_level);
 
+#if(NFC_NXP_NOT_OPEN_INCLUDED == TRUE)
+/*******************************************************************************
+**
+** Function         LLCP_RegisterDtaCback
+**
+** Description      Register callback function for LLCP DTA testing
+**
+**
+** Returns          void
+**
+*******************************************************************************/
+LLCP_API extern void LLCP_RegisterDtaCback (tLLCP_DTA_CBACK *p_dta_cback);
+#endif
+
 #if (LLCP_TEST_INCLUDED == TRUE)
 /*******************************************************************************
 **
@@ -674,4 +707,3 @@ LLCP_API extern void LLCP_SetTestParams (UINT8 version, UINT16 wks);
 #endif
 
 #endif  /* LLCP_API_H */
-
